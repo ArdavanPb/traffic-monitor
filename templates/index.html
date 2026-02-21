@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Traffic Monitor{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-router"></i> Network Traffic Overview</h5>
+                <div>
+                    <span class="badge bg-primary refresh-badge" onclick="refreshStats()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </span>
+                    <span class="badge bg-info" id="last-updated">
+                        Just now
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card stat-card download">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">
+                                    <i class="bi bi-download"></i> Downloaded
+                                </h6>
+                                <h4 class="card-title" id="download-used">
+                                    {{ stats.download_used or '0 B' }}
+                                </h4>
+                                <p class="card-text small">
+                                    <i class="bi bi-graph-up"></i> 
+                                    <span id="avg-download-rate">{{ stats.avg_download_rate or '0 B/s' }}</span> avg
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stat-card upload">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">
+                                    <i class="bi bi-upload"></i> Uploaded
+                                </h6>
+                                <h4 class="card-title" id="upload-used">
+                                    {{ stats.upload_used or '0 B' }}
+                                </h4>
+                                <p class="card-text small">
+                                    <i class="bi bi-graph-up"></i> 
+                                    <span id="avg-upload-rate">{{ stats.avg_upload_rate or '0 B/s' }}</span> avg
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stat-card total">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">
+                                    <i class="bi bi-pie-chart"></i> Total Traffic
+                                </h6>
+                                <h4 class="card-title" id="total-used">
+                                    {{ stats.total_used or '0 B' }}
+                                </h4>
+                                <p class="card-text small">
+                                    <i class="bi bi-calendar"></i> Since: 
+                                    <span id="monitoring-since">{{ stats.monitoring_since or 'N/A' }}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-ethernet"></i> Primary Interface</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Interface:</strong> 
+                                            <span class="badge bg-primary" id="primary-interface">
+                                                {{ stats.primary_interface or 'N/A' }}
+                                            </span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Current RX:</strong> 
+                                            <span id="current-rx">{{ stats.current_rx or '0 B' }}</span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Current TX:</strong> 
+                                            <span id="current-tx">{{ stats.current_tx or '0 B' }}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Time Elapsed:</strong> 
+                                            <span id="time-elapsed">{{ stats.time_elapsed or '0h 0m' }}</span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p class="mb-1"><strong>Current Total:</strong> 
+                                            <span id="current-total">{{ stats.current_total or '0 B' }}</span>
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button class="btn btn-warning btn-sm" onclick="resetStats()">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Reset Stats
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Network Interfaces</h5>
+                <div>
+                    {% for iface in interfaces %}
+                        <span class="badge bg-secondary interface-badge" onclick="loadInterfaceStats('{{ iface }}')">
+                            {{ iface }}
+                        </span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Interface</th>
+                                <th>RX</th>
+                                <th>TX</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="interfaces-table">
+                            {% for iface_stat in stats.all_interfaces %}
+                                <tr>
+                                    <td>{{ iface_stat.split(':')[0] }}</td>
+                                    <td>{{ iface_stat.split('RX:')[1].split('TX:')[0].strip() if 'RX:' in iface_stat else 'N/A' }}</td>
+                                    <td>{{ iface_stat.split('TX:')[1].split('TOTAL:')[0].strip() if 'TX:' in iface_stat else 'N/A' }}</td>
+                                    <td>{{ iface_stat.split('TOTAL:')[1].strip() if 'TOTAL:' in iface_stat else 'N/A' }}</td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No interface data available</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-journal-text"></i> Recent Logs</h5>
+                <span class="badge bg-info" onclick="refreshLogs()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </span>
+            </div>
+            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                <div id="logs-container">
+                    {% for log in logs %}
+                        <div class="log-entry">{{ log }}</div>
+                    {% else %}
+                        <div class="text-center text-muted">No logs available</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i> Log file: {{ stats.log_file or 'N/A' }}
+                </small>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-gear"></i> System Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>State File:</strong></p>
+                        <code class="small">{{ stats.state_file or 'N/A' }}</code>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-1"><strong>Auto-refresh:</strong> Every 30 seconds</p>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                            <label class="form-check-label" for="auto-refresh">Enable auto-refresh</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let refreshInterval;
+    
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('current-time').textContent = 
+            now.toLocaleString('en-US', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+    }
+    
+    function refreshStats() {
+        fetch('/api/stats')
+            .then(response => response.json())
+            .then(data => {
+                // Update all stats
+                document.getElementById('download-used').textContent = data.download_used || '0 B';
+                document.getElementById('upload-used').textContent = data.upload_used || '0 B';
+                document.getElementById('total-used').textContent = data.total_used || '0 B';
+                document.getElementById('avg-download-rate').textContent = data.avg_download_rate || '0 B/s';
+                document.getElementById('avg-upload-rate').textContent = data.avg_upload_rate || '0 B/s';
+                document.getElementById('primary-interface').textContent = data.primary_interface || 'N/A';
+                document.getElementById('current-rx').textContent = data.current_rx || '0 B';
+                document.getElementById('current-tx').textContent = data.current_tx || '0 B';
+                document.getElementById('current-total').textContent = data.current_total || '0 B';
+                document.getElementById('monitoring-since').textContent = data.monitoring_since || 'N/A';
+                document.getElementById('time-elapsed').textContent = data.time_elapsed || '0h 0m';
+                
+                // Update interfaces table
+                const tableBody = document.getElementById('interfaces-table');
+                if (data.all_interfaces && data.all_interfaces.length > 0) {
+                    tableBody.innerHTML = '';
+                    data.all_interfaces.forEach(ifaceStat => {
+                        const row = document.createElement('tr');
+                        
+                        // Parse interface stat string
+                        const parts = ifaceStat.split(':');
+                        const ifaceName = parts[0];
+                        const rx = ifaceStat.includes('RX:') ? ifaceStat.split('RX:')[1].split('TX:')[0].trim() : 'N/A';
+                        const tx = ifaceStat.includes('TX:') ? ifaceStat.split('TX:')[1].split('TOTAL:')[0].trim() : 'N/A';
+                        const total = ifaceStat.includes('TOTAL:') ? ifaceStat.split('TOTAL:')[1].trim() : 'N/A';
+                        
+                        row.innerHTML = `
+                            <td>${ifaceName}</td>
+                            <td>${rx}</td>
+                            <td>${tx}</td>
+                            <td>${total}</td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+                
+                // Update last updated time
+                const now = new Date();
+                document.getElementById('last-updated').textContent = 
+                    `Updated: ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            })
+            .catch(error => {
+                console.error('Error refreshing stats:', error);
+            });
+    }
+    
+    function refreshLogs() {
+        fetch('/api/logs')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('logs-container');
+                container.innerHTML = '';
+                
+                if (data.logs && data.logs.length > 0) {
+                    data.logs.forEach(log => {
+                        const div = document.createElement('div');
+                        div.className = 'log-entry';
+                        div.textContent = log;
+                        container.appendChild(div);
+                    });
+                } else {
+                    container.innerHTML = '<div class="text-center text-muted">No logs available</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Error refreshing logs:', error);
+            });
+    }
+    
+    function loadInterfaceStats(interfaceName) {
+        fetch(`/api/interface/${interfaceName}`)
+            .then(response => response.json())
+            .then(data => {
+                // Update primary interface stats
+                document.getElementById('primary-interface').textContent = interfaceName;
+                document.getElementById('download-used').textContent = data.download_used || '0 B';
+                document.getElementById('upload-used').textContent = data.upload_used || '0 B';
+                document.getElementById('total-used').textContent = data.total_used || '0 B';
+                
+                // Highlight selected interface badge
+                document.querySelectorAll('.interface-badge').forEach(badge => {
+                    badge.classList.remove('bg-primary');
+                    badge.classList.add('bg-secondary');
+                });
+                
+                // Find and highlight the clicked badge
+                const badges = document.querySelectorAll('.interface-badge');
+                for (let badge of badges) {
+                    if (badge.textContent.trim() === interfaceName) {
+                        badge.classList.remove('bg-secondary');
+                        badge.classList.add('bg-primary');
+                        break;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading interface stats:', error);
+            });
+    }
+    
+    function resetStats() {
+        if (confirm('Are you sure you want to reset all traffic statistics? This will start monitoring from scratch.')) {
+            fetch('/reset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Statistics reset successfully. Refreshing...');
+                    refreshStats();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error resetting statistics: ' + error);
+            });
+        }
+    }
+    
+    function startAutoRefresh() {
+        if (document.getElementById('auto-refresh').checked) {
+            refreshInterval = setInterval(refreshStats, 30000); // 30 seconds
+        } else {
+            clearInterval(refreshInterval);
+        }
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Start auto-refresh
+        startAutoRefresh();
+        
+        // Listen for auto-refresh toggle
+        document.getElementById('auto-refresh').addEventListener('change', startAutoRefresh);
+        
+        // Initial refresh
+        refreshStats();
+    });
+</script>
+{% endblock %}
