@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  traffic-monitor:
+    build: .
+    container_name: traffic-monitor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    # Required for network interface access
+    network_mode: host
+    # Required for accessing /proc and /sys
+    privileged: true
+    volumes:
+      # Mount host network interfaces and proc filesystem
+      - /proc:/proc:ro
+      - /sys/class/net:/sys/class/net:ro
+      # Persist logs and state data
+      - traffic-monitor-logs:/root/.traffic-monitor/logs
+      - traffic-monitor-state:/root/.traffic-monitor/state
+    environment:
+      - TZ=UTC
+    # Health check is defined in Dockerfile
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/login')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  traffic-monitor-logs:
+  traffic-monitor-state:

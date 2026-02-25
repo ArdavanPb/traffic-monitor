@@ -145,7 +145,11 @@ if [[ ! -f "$STATE_FILE" ]]; then
     exit 0
 fi
 
-read rx_start tx_start total_start timestamp < "$STATE_FILE"
+# Read state from file (each value on separate line)
+rx_start=$(sed -n '1p' "$STATE_FILE")
+tx_start=$(sed -n '2p' "$STATE_FILE")
+total_start=$(sed -n '3p' "$STATE_FILE")
+timestamp=$(sed -n '4p' "$STATE_FILE")
 
 # Calculate usage
 rx_used=$(( rx_now - rx_start ))

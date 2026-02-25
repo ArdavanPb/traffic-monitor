@@ -85,7 +85,22 @@ def parse_traffic_output(output):
     }
     
     lines = output.split('\n')
+    in_all_interfaces_section = False
+    
     for i, line in enumerate(lines):
+        if 'ALL INTERFACES' in line:
+            in_all_interfaces_section = True
+            # Parse all interfaces section
+            for j in range(i + 1, len(lines)):
+                if ':' in lines[j] and ('RX:' in lines[j] or 'TX:' in lines[j]):
+                    iface_data = lines[j].strip()
+                    data['all_interfaces'].append(iface_data)
+            continue
+        
+        if in_all_interfaces_section and ':' in line and ('RX:' in line or 'TX:' in line):
+            # Skip interface lines in the ALL INTERFACES section
+            continue
+            
         if 'Primary Interface:' in line:
             data['primary_interface'] = line.split(':')[1].strip()
         elif 'Monitoring since:' in line:
@@ -118,12 +133,6 @@ def parse_traffic_output(output):
             data['log_file'] = line.split(':')[1].strip()
         elif 'State file:' in line:
             data['state_file'] = line.split(':')[1].strip()
-        elif 'ALL INTERFACES' in line:
-            # Parse all interfaces section
-            for j in range(i + 1, len(lines)):
-                if ':' in lines[j] and ('RX:' in lines[j] or 'TX:' in lines[j]):
-                    iface_data = lines[j].strip()
-                    data['all_interfaces'].append(iface_data)
     
     return data
 
@@ -232,6 +241,7 @@ def reset_stats():
         return jsonify({'success': False, 'message': str(e)})
 
 if __name__ == '__main__':
-    print(f"Traffic Monitor Web UI starting on http://localhost:{8080}")
+    port = 8080
+    print(f"Traffic Monitor Web UI starting on http://localhost:{port}")
     print(f"Login with username: {CONFIG['web_user']}, password: {CONFIG['web_pass']}")
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)
